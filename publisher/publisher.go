@@ -1,40 +1,51 @@
-package publisher
+package main
 
 import (
-	"github.com/pebbe/zmq4"
 	"fmt"
 	"time"
+
+	"github.com/pebbe/zmq4"
 )
 
 func main() {
 	publisher, _ := zmq4.NewSocket(zmq4.PUB)
 	defer publisher.Close()
-	publisher.Bind("tcp://127.0.0.1:5555")
+	publisher.Bind("tcp://*:5555")
 
-	messageQueue := make(chan string, 100) // Buat channel untuk menyimpan pesan
+	messageQueue := make(chan string, 100) // Message queue untuk menyimpan pesan
+	subscriberConnected := false
 
-	go func() {
+	// Fungsi untuk mengirim pesan dari message queue ke publisher
+	sendMessagesFromQueue := func() {
 		for {
 			select {
-			case msg := <-messageQueue:
-				publisher.Send(msg, 0)
-				fmt.Printf("Mengirim: %s\n", msg)
+			case message := <-messageQueue:
+				publisher.Send(message, 0)
+				fmt.Println("Published from queue:", message)
 			}
 		}
-	}()
+	}
+
+	// Mulai goroutine untuk mengirim pesan dari message queue
+	go sendMessagesFromQueue()
 
 	for i := 0; ; i++ {
-		msg := fmt.Sprintf("Data ke-%d", i)
+		message := fmt.Sprintf("Data %d", i)
 
-		// Coba kirim pesan ke subscriber
-		sent := publisher.Send(msg, zmq4.DONTWAIT)
-		if sent == nil {
-			fmt.Printf("Mengirim: %s\n", msg)
+		// Jika tidak ada subscriber yang terhubung, simpan pesan dalam message queue
+		if !subscriberConnected {
+			messageQueue <- message
 		} else {
-			// Jika tidak bisa mengirim (subscriber tidak terhubung), simpan pesan di antrean
-			messageQueue <- msg
+			if len(messageQueue) > 0 {
+				// Kirim pesan dari message queue jika ada pesan yang tertunda
+				sendMessagesFromQueue()
+			}
+
+			// Kirim pesan baru
+			publisher.Send(message, 0)
+			fmt.Println("Published:", message)
 		}
 
-		time.Sleep(time.Second) // Menunggu sejenak sebelum mengirim pesan berikutnya
+		time.Sleep(time.Second)
 	}
 }
