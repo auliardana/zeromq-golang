@@ -2,19 +2,33 @@ package main
 
 import (
 	"fmt"
-	"github.com/pebbe/zmq4"
+	"log"
+	"time"
+
+	zmq "github.com/pebbe/zmq4"
 )
 
 func main() {
-	subscriber, _ := zmq4.NewSocket(zmq4.SUB)
+	subscriber, _ := zmq.NewSocket(zmq.SUB)
 	defer subscriber.Close()
-	subscriber.Connect("tcp://localhost:5555") // Sesuaikan dengan alamat publisher
 
-	// Anda dapat menentukan filter untuk pesan yang akan diterima. Untuk menerima semua pesan, gunakan filter kosong.
-	subscriber.SetSubscribe("")
+	// Hubungkan ke publisher
+	err := subscriber.Connect("tcp://localhost:5555")
+	if err != nil {
+		log.Fatalf("Gagal menghubungkan subscriber: %s\n", err)
+		return
+	}
+
+	subscriber.SetSubscribe("") // Subscribe to all messages
 
 	for {
-		message, _ := subscriber.Recv(0)
-		fmt.Println("Received:", message)
+		message, err := subscriber.Recv(0)
+		if err != nil {
+			log.Printf("Gagal menerima pesan: %s\n", err)
+			time.Sleep(1 * time.Second)
+			continue
+	}
+
+	fmt.Println("Menerima: ", message)
 	}
 }
